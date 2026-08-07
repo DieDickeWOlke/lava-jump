@@ -34,6 +34,10 @@ let flightTimer = 0;
 let flightActive = false;
 let spaceWasPressed = false;
 let camX = 0;
+const goalDistance = 10000;
+let gameOver = false;
+let won = false;
+const restartButton = { x: 320, y: 260, w: 260, h: 60 };
 
 const keys = { left: false, right: false, space: false };
 
@@ -92,12 +96,28 @@ function getSurfaceY(px) {
   return groundY;
 }
 
-function resetToSafePlace() {
-  player.x = Math.max(0, lastSafeX - 20);
-  player.y = groundY - player.r;
+function resetGame() {
+  player.x = 120;
+  player.y = 320;
   player.vy = 0;
-  onGround = true;
+  onGround = false;
+  lastSafeX = player.x;
+  gaps = [];
+  nextGapStart = 450;
+  ramps = [];
+  nextRampX = 650;
+  flightItems = [];
+  hasFlight = false;
+  flightTimer = 0;
+  flightActive = false;
   jumpsLeft = extraJumps;
+  spaceWasPressed = false;
+  camX = 0;
+  gameOver = false;
+  won = false;
+
+  growLevel(2000);
+  spawnRamps(2000);
 }
 
 function handleInput() {
@@ -169,7 +189,15 @@ function updatePhysics() {
   }
 
   if (player.y - player.r > H) {
-    resetToSafePlace();
+    gameOver = true;
+    won = false;
+    return;
+  }
+
+  if (player.x >= goalDistance) {
+    gameOver = true;
+    won = true;
+    return;
   }
 
   growLevel(player.x + 4000);
@@ -211,6 +239,17 @@ function drawWorld() {
     }
   }
 
+  if (goalDistance > 0) {
+    const goalScreenX = goalDistance - camX;
+    if (goalScreenX >= -30 && goalScreenX <= W + 30) {
+      ctx.fillStyle = '#ffd700';
+      ctx.fillRect(goalScreenX - 3, 300, 6, 130);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(goalScreenX - 20, 290, 40, 10);
+      ctx.fillRect(goalScreenX - 20, 420, 40, 10);
+    }
+  }
+
   ctx.beginPath();
   ctx.arc(player.x - camX, player.y, player.r, 0, Math.PI * 2);
   ctx.fillStyle = color(...BALL);
@@ -233,17 +272,34 @@ function drawWorld() {
   ctx.fillStyle = color(...TEXT);
   ctx.font = '20px Arial';
   ctx.fillText('Pfeile: bewegen | Leertaste: springen / fliegen', 14, 28);
-  ctx.fillText(`Distanz: ${Math.floor(player.x)}`, 14, 56);
+  ctx.fillText(`Distanz: ${Math.floor(player.x)} / ${goalDistance}`, 14, 56);
   if (hasFlight && flightTimer > 0) {
     ctx.fillText('Flug aktiv! Halte Leertaste für den Flug', 14, 84);
   } else if (hasFlight) {
     ctx.fillText('Flug bereit!', 14, 84);
   }
+
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = won ? '#ffd700' : '#ff4d4d';
+    ctx.font = '72px Arial';
+    ctx.fillText(won ? 'GEWONNEN!' : 'GAME OVER', 180, 180);
+    ctx.font = '28px Arial';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(won ? 'Du hast das Ziel erreicht!' : 'Du bist in der Lava gelandet.', 220, 245);
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(restartButton.x, restartButton.y, restartButton.w, restartButton.h);
+    ctx.strokeRect(restartButton.x + 8, restartButton.y + 8, restartButton.w - 16, restartButton.h - 16);
+    ctx.fillText('Neustart', 365, 292);
+  }
 }
 
 function loop() {
-  handleInput();
-  updatePhysics();
+  if (!gameOver) {
+    handleInput();
+    updatePhysics();
+  }
   drawWorld();
   requestAnimationFrame(loop);
 }
@@ -275,8 +331,26 @@ function handleKeyUp(event) {
   }
 }
 
-document.addEventListener('keydown', handleKeyDown);
+document.addEventListener('keydown', (event) => {
+  handleKeyDown(event);
+  if (gameOver && event.code === 'Enter') {
+    resetGame();
+  }
+});
 document.addEventListener('keyup', handleKeyUp);
+canvas.addEventListener('click', (event) => {
+  if (!gameOver) {
+    return;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (event.clientX - rect.left) * scaleX;
+  const y = (event.clientY - rect.top) * scaleY;
+  if (x >= restartButton.x && x <= restartButton.x + restartButton.w && y >= restartButton.y && y <= restartButton.y + restartButton.h) {
+    resetGame();
+  }
+});
 window.addEventListener('blur', () => {
   keys.left = false;
   keys.right = false;
@@ -284,6 +358,5 @@ window.addEventListener('blur', () => {
   spaceWasPressed = false;
 });
 
-growLevel(2000);
-spawnRamps(2000);
+resetGame();
 loop();

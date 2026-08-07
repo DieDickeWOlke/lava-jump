@@ -39,7 +39,7 @@ r = 18
 x, y, vy = 120.0, 320.0, 0.0   # Position und Fall-/Sprunggeschwindigkeit
 
 # Spielzustand
-goal_distance = 5000
+goal_distance = 10000
 game_over = False
 won = False
 restart_button_rect = pygame.Rect(320, 260, 260, 60)
