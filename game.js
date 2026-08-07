@@ -40,6 +40,15 @@ let won = false;
 const restartButton = { x: 320, y: 260, w: 260, h: 60 };
 
 const keys = { left: false, right: false, space: false };
+const mobileControls = document.getElementById('mobile-controls');
+const hint = document.getElementById('hint');
+const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+
+function updateHint() {
+  if (isTouchDevice) {
+    hint.textContent = 'Tippe auf die Buttons unten, um zu laufen und zu springen.';
+  }
+}
 
 function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -338,6 +347,59 @@ document.addEventListener('keydown', (event) => {
   }
 });
 document.addEventListener('keyup', handleKeyUp);
+
+if (mobileControls) {
+  mobileControls.addEventListener('touchstart', (event) => {
+    event.preventDefault();
+  }, { passive: false });
+
+  mobileControls.querySelectorAll('.control-btn').forEach((button) => {
+    button.addEventListener('touchstart', () => {
+      const action = button.dataset.action;
+      if (action === 'left') {
+        keys.left = true;
+      } else if (action === 'right') {
+        keys.right = true;
+      } else if (action === 'jump') {
+        keys.space = true;
+      }
+    });
+
+    button.addEventListener('touchend', () => {
+      const action = button.dataset.action;
+      if (action === 'left') {
+        keys.left = false;
+      } else if (action === 'right') {
+        keys.right = false;
+      } else if (action === 'jump') {
+        keys.space = false;
+      }
+    });
+
+    button.addEventListener('mousedown', () => {
+      const action = button.dataset.action;
+      if (action === 'left') {
+        keys.left = true;
+      } else if (action === 'right') {
+        keys.right = true;
+      } else if (action === 'jump') {
+        keys.space = true;
+      }
+    });
+
+    button.addEventListener('mouseup', () => {
+      const action = button.dataset.action;
+      if (action === 'left') {
+        keys.left = false;
+      } else if (action === 'right') {
+        keys.right = false;
+      } else if (action === 'jump') {
+        keys.space = false;
+      }
+    });
+  });
+}
+
 canvas.addEventListener('click', (event) => {
   if (!gameOver) {
     return;
@@ -358,5 +420,6 @@ window.addEventListener('blur', () => {
   spaceWasPressed = false;
 });
 
+updateHint();
 resetGame();
 loop();
