@@ -38,6 +38,13 @@ SKY, GROUND, LAVA, BALL, TEXT = (170, 220, 255), (70, 170, 70), (235, 70, 20), (
 r = 18
 x, y, vy = 120.0, 320.0, 0.0   # Position und Fall-/Sprunggeschwindigkeit
 
+# Spielzustand
+goal_distance = 5000
+game_over = False
+won = False
+restart_button_rect = pygame.Rect(320, 260, 260, 60)
+win_button_rect = pygame.Rect(320, 260, 260, 60)
+
 # speed = Tempo links/rechts
 # jump = Sprungstaerke
 # gravity = Schwerkraft pro Bild
@@ -119,12 +126,44 @@ def get_surface_y(px):
     return ground_y
 
 
-# Schon vor Spielstart einen Teil vom Level vorbereiten.
-grow_level(2000)
-spawn_ramps(2000)
+def get_ramp_properties(px):
+    """Gibt Steigung und Oberfläche einer Rampe an einer X-Position zurück."""
+    for start_x, end_x, start_y, end_y in ramps:
+        if start_x <= px <= end_x:
+            if end_x == start_x:
+                return 0.0, start_y
+            slope = (end_y - start_y) / (end_x - start_x)
+            return slope, start_y + slope * (px - start_x)
+    return 0.0, ground_y
 
+
+# Schon vor Spielstart einen Teil vom Level vorbereiten.
+def reset_game():
+    global x, y, vy, on_ground, last_safe_x, gaps, next_gap_start, ramps, next_ramp_x, flight_items
+    global has_flight, flight_timer, flight_active, jumps_left, space_was_pressed, game_over, won
+
+    x, y, vy = 120.0, 320.0, 0.0
+    on_ground = False
+    last_safe_x = x
+    gaps = []
+    next_gap_start = 450
+    ramps = []
+    next_ramp_x = 650
+    flight_items = []
+    has_flight = False
+    flight_timer = 0
+    flight_active = False
+    jumps_left = extra_jumps
+    space_was_pressed = False
+    game_over = False
+    won = False
+
+    grow_level(2000)
+    spawn_ramps(2000)
+
+
+reset_game()
 running = True
-space_was_pressed = False
 
 # Hauptschleife: laeuft 60-mal pro Sekunde.
 while running:
@@ -132,6 +171,12 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN and game_over:
+            if restart_button_rect.collidepoint(event.pos):
+                reset_game()
+
+    if game_over:
+        continue
 
     # Eingabe lesen
     keys = pygame.key.get_pressed()
@@ -185,14 +230,27 @@ while running:
 
     # Landen geht nur, wenn unter dem Ball Boden oder auf einer Rampe ist.
     surface_y = get_surface_y(x)
+    ramp_slope, ramp_y = get_ramp_properties(x)
     if (not is_gap(x)) and (y + r >= surface_y):
         y, vy, on_ground, last_safe_x, jumps_left = surface_y - r, 0, True, x, extra_jumps
     else:
         on_ground = False
 
+    if on_ground and abs(ramp_slope) > 0.0001:
+        # Auf der Rampe rollt der Ball leicht nach unten.
+        y = max(y, ramp_y - r)
+        if vy > 0:
+            vy = min(vy, 2.4)
+
     # Wenn der Ball tief faellt (Lava), auf letzte sichere Stelle setzen.
     if y - r > H:
-        x, y, vy, on_ground, jumps_left = max(0, last_safe_x - 20), ground_y - r, 0, True, extra_jumps
+        game_over = True
+        continue
+
+    if x >= goal_distance:
+        won = True
+        game_over = True
+        continue
 
     # Immer neue Teile vom Level erzeugen, damit es endlos ist.
     grow_level(x + 4000)
@@ -217,6 +275,13 @@ while running:
             (start_x - cam_x, ground_y),
         ]
         pygame.draw.polygon(screen, GROUND, points)
+
+    if goal_distance > 0:
+        goal_screen_x = goal_distance - cam_x
+        if 0 <= goal_screen_x <= W:
+            pygame.draw.rect(screen, (255, 215, 0), (goal_screen_x - 3, 300, 6, 130))
+            pygame.draw.rect(screen, (255, 255, 255), (goal_screen_x - 20, 290, 40, 10))
+            pygame.draw.rect(screen, (255, 255, 255), (goal_screen_x - 20, 420, 40, 10))
 
     # Danach kommen die Lava-Abgruende ueber den Boden.
     for start, end in gaps:
@@ -245,6 +310,22 @@ while running:
     elif has_flight:
         screen.blit(font.render("Flug bereit!", True, TEXT), (14, 62))
     screen.blit(font.render(f"Distanz: {int(x)}", True, TEXT), (14, 38))
+
+    if game_over:
+        screen.fill((0, 0, 0))
+        if won:
+            title_font = pygame.font.SysFont(None, 110)
+            subtitle_font = pygame.font.SysFont(None, 42)
+            screen.blit(title_font.render("GEWONNEN!", True, (255, 215, 0)), (140, 120))
+            screen.blit(subtitle_font.render("Du hast das Ziel erreicht!", True, (255, 255, 255)), (210, 240))
+            screen.blit(subtitle_font.render("Super gemacht!", True, (170, 220, 255)), (310, 295))
+        else:
+            game_over_font = pygame.font.SysFont(None, 90)
+            screen.blit(game_over_font.render("GAME OVER", True, (255, 0, 0)), (210, 180))
+            screen.blit(font.render("Du bist in der Lava gelandet.", True, (255, 255, 255)), (235, 260))
+        pygame.draw.rect(screen, (255, 255, 255), restart_button_rect, 2)
+        pygame.draw.rect(screen, (255, 255, 255), restart_button_rect.inflate(8, 8), 2)
+        screen.blit(font.render("Neustart", True, (255, 255, 255)), (370, 276))
 
     # Neues Bild anzeigen und auf 60 FPS begrenzen.
     pygame.display.flip()
