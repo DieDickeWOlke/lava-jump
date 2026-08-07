@@ -51,8 +51,9 @@ ground_y, on_ground, last_safe_x = 430, False, x
 # Jeder Abgrund ist ein Tupel: (start_x, end_x)
 gaps, next_gap_start = [], 450
 
-# Anzahl der Doppelsprünge
-jumps_left = 2 
+# Anzahl der zusätzlichen Sprünge nach dem ersten
+extra_jumps = 1
+jumps_left = extra_jumps
 
 def grow_level(target_x):
     """Erzeugt so lange neue Abgruende, bis das Level weit genug reicht."""
@@ -80,7 +81,9 @@ def is_gap(px):
 
 # Schon vor Spielstart einen Teil vom Level vorbereiten.
 grow_level(2000)
+
 running = True
+space_was_pressed = False
 
 # Hauptschleife: laeuft 60-mal pro Sekunde.
 while running:
@@ -99,9 +102,15 @@ while running:
     # Links ist Schluss bei x = 0.
     x = max(0, x)  # nicht links aus der Welt laufen
 
-    # Springen nur vom Boden aus
-    if keys[pygame.K_SPACE] and on_ground:
-        vy, on_ground = -jump, False
+    space_pressed = keys[pygame.K_SPACE]
+    if space_pressed and not space_was_pressed:
+        if on_ground:
+            vy, on_ground = -jump, False
+            jumps_left = extra_jumps
+        elif jumps_left > 0:
+            vy = -jump
+            jumps_left -= 1
+    space_was_pressed = space_pressed
 
     # Physik:
     # 1) Schwerkraft erhoeht vy
@@ -111,13 +120,13 @@ while running:
 
     # Landen geht nur, wenn unter dem Ball Boden ist (kein Abgrund).
     if (not is_gap(x)) and (y + r >= ground_y):
-        y, vy, on_ground, last_safe_x = ground_y - r, 0, True, x
+        y, vy, on_ground, last_safe_x, jumps_left = ground_y - r, 0, True, x, extra_jumps
     else:
         on_ground = False
 
     # Wenn der Ball tief faellt (Lava), auf letzte sichere Stelle setzen.
     if y - r > H:
-        x, y, vy, on_ground = max(0, last_safe_x - 20), ground_y - r, 0, True
+        x, y, vy, on_ground, jumps_left = max(0, last_safe_x - 20), ground_y - r, 0, True, extra_jumps
 
     # Immer neue Teile vom Level erzeugen, damit es endlos ist.
     grow_level(x + 2000)
@@ -142,7 +151,7 @@ while running:
     pygame.draw.circle(screen, BALL, (int(x - cam_x), int(y)), r)
 
     # Kleine Texte als Hilfe.
-    screen.blit(font.render("Pfeile: bewegen | Leertaste: springen", True, TEXT), (14, 12))
+    screen.blit(font.render("Pfeile: bewegen | Leertaste: springen/doppelspringen", True, TEXT), (14, 12))
     screen.blit(font.render(f"Distanz: {int(x)}", True, TEXT), (14, 38))
 
     # Neues Bild anzeigen und auf 60 FPS begrenzen.
