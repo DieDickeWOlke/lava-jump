@@ -51,9 +51,10 @@ ground_y, on_ground, last_safe_x = 430, False, x
 # Jeder Abgrund ist ein Tupel: (start_x, end_x)
 gaps, next_gap_start = [], 450
 
-# Schräge Rampen, die nicht über Lava liegen und nah beieinander stehen.
+# Schräge Rampen, die nicht über Lava liegen und in Abständen von 2000 bis 4000 vorkommen.
 # (start_x, end_x, start_y, end_y)
 ramps = []
+next_ramp_x = 650
 
 # Anzahl der zusätzlichen Sprünge nach dem ersten
 extra_jumps = 1
@@ -71,18 +72,17 @@ def is_safe_ramp(start_x, end_x):
     return not any(start <= x <= end for start, end in gaps for x in range(start_x, end_x + 1))
 
 
-def build_level_features():
-    """Erzeugt sichere Rampen und die dazugehörigen Flug-Items."""
-    global ramps, flight_items
+def spawn_ramps(target_x):
+    """Erzeugt sichere Rampen und die dazugehörigen Flug-Items weiter vorne im Level."""
+    global ramps, flight_items, next_ramp_x
 
-    ramps.clear()
-    flight_items.clear()
-
-    ramp_specs = [(650, 820), (930, 1100)]
-    for start_x, end_x in ramp_specs:
+    while next_ramp_x < target_x:
+        start_x = next_ramp_x
+        end_x = start_x + 150
         if is_safe_ramp(start_x, end_x):
             ramps.append((start_x, end_x, ground_y, ground_y - 100))
-            flight_items.append((start_x + 85, ground_y - 140))
+            flight_items.append((start_x + 75, ground_y - 140))
+        next_ramp_x += random.randint(2000, 4000)
 
 def grow_level(target_x):
     """Erzeugt so lange neue Abgruende, bis das Level weit genug reicht."""
@@ -121,7 +121,7 @@ def get_surface_y(px):
 
 # Schon vor Spielstart einen Teil vom Level vorbereiten.
 grow_level(2000)
-build_level_features()
+spawn_ramps(2000)
 
 running = True
 space_was_pressed = False
@@ -195,7 +195,8 @@ while running:
         x, y, vy, on_ground, jumps_left = max(0, last_safe_x - 20), ground_y - r, 0, True, extra_jumps
 
     # Immer neue Teile vom Level erzeugen, damit es endlos ist.
-    grow_level(x + 2000)
+    grow_level(x + 4000)
+    spawn_ramps(x + 4000)
 
     # Kamera:
     # Ball bleibt eher links im Bild, die Welt bewegt sich nach links.
