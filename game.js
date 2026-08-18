@@ -88,15 +88,11 @@ function isSafeGround(px, padding = 120) {
   return true;
 }
 
-function getSafeSpawnX(startX, maxDistance = 600) {
+function getSafeSpawnX(startX, maxDistance = 1600) {
   for (let offset = 0; offset <= maxDistance; offset += 1) {
     const rightX = startX + offset;
-    const leftX = startX - offset;
     if (isSafeGround(rightX, 120)) {
       return rightX;
-    }
-    if (isSafeGround(leftX, 120)) {
-      return leftX;
     }
   }
 
@@ -188,7 +184,7 @@ function spawnFireball() {
       x,
       y: groundY + 8,
       vx: (rand(-2, 2) * 0.8) + (level - 1) * 0.2,
-      vy: -rand(8 + (level - 1), 12 + level),
+      vy: -rand(8, 12),
       r: rand(12, 18) + Math.min(8, level - 1),
       life: rand(110, 190) - (level - 1) * 8,
     });
