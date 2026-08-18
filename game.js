@@ -21,7 +21,6 @@ const player = {
 
 const groundY = 430;
 let onGround = false;
-let lastSafeX = player.x;
 let gaps = [];
 let nextGapStart = 450;
 let ramps = [];
@@ -31,7 +30,6 @@ let jumpsLeft = extraJumps;
 let flightItems = [];
 let hasFlight = false;
 let flightTimer = 0;
-let flightActive = false;
 let fireballs = [];
 let fireballTimer = 0;
 let levelFlashTimer = 0;
@@ -45,6 +43,11 @@ let won = false;
 const restartButton = { x: 320, y: 260, w: 260, h: 60 };
 
 const keys = { left: false, right: false, space: false };
+const CONTROL_ACTIONS = {
+  LEFT: 'left',
+  RIGHT: 'right',
+  JUMP: 'jump',
+};
 const mobileControls = document.getElementById('mobile-controls');
 const hint = document.getElementById('hint');
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
@@ -210,7 +213,6 @@ function resetGame() {
   player.y = 320;
   player.vy = 0;
   onGround = false;
-  lastSafeX = player.x;
   gaps = [];
   nextGapStart = 450;
   ramps = [];
@@ -218,7 +220,6 @@ function resetGame() {
   flightItems = [];
   hasFlight = false;
   flightTimer = 0;
-  flightActive = false;
   fireballs = [];
   fireballTimer = 0;
   jumpsLeft = extraJumps;
@@ -231,7 +232,7 @@ function resetGame() {
   spawnRamps(2000);
 }
 
-function handleInput() {
+function movePlayer() {
   if (keys.left) {
     player.x -= player.speed;
   }
@@ -239,7 +240,9 @@ function handleInput() {
     player.x += player.speed;
   }
   player.x = Math.max(0, player.x);
+}
 
+function collectFlightItem() {
   for (let i = flightItems.length - 1; i >= 0; i -= 1) {
     const [itemX, itemY] = flightItems[i];
     if (Math.abs(player.x - itemX) < player.r + 12 && Math.abs(player.y - itemY) < player.r + 12) {
@@ -249,24 +252,30 @@ function handleInput() {
       break;
     }
   }
+}
 
-  if (hasFlight) {
-    if (flightTimer > 0) {
-      flightTimer -= 1;
-    } else {
-      hasFlight = false;
-      flightActive = false;
-    }
+function updateFlightState() {
+  if (!hasFlight) {
+    return;
   }
 
+  if (flightTimer > 0) {
+    flightTimer -= 1;
+    return;
+  }
+
+  hasFlight = false;
+}
+
+function handleJumpInput() {
   const spacePressed = keys.space;
+
   if (spacePressed && !spaceWasPressed) {
     if (onGround) {
       player.vy = -player.jump;
       onGround = false;
       jumpsLeft = extraJumps;
     } else if (hasFlight && flightTimer > 0) {
-      flightActive = true;
       player.vy = -player.jump * 0.7;
       flightTimer = Math.max(0, flightTimer - 20);
     } else if (jumpsLeft > 0) {
@@ -274,14 +283,18 @@ function handleInput() {
       jumpsLeft -= 1;
     }
   } else if (hasFlight && flightTimer > 0 && spacePressed && !onGround) {
-    flightActive = true;
     player.vy = Math.max(player.vy - 0.45, -7.5);
     flightTimer = Math.max(0, flightTimer - 1);
-  } else {
-    flightActive = false;
   }
 
   spaceWasPressed = spacePressed;
+}
+
+function handleInput() {
+  movePlayer();
+  collectFlightItem();
+  updateFlightState();
+  handleJumpInput();
 }
 
 function updatePhysics() {
@@ -339,7 +352,6 @@ function updatePhysics() {
     player.y = surfaceY - player.r;
     player.vy = 0;
     onGround = true;
-    lastSafeX = player.x;
     jumpsLeft = extraJumps;
   } else {
     onGround = false;
@@ -362,14 +374,12 @@ function updatePhysics() {
   camX = Math.max(0, player.x - 220);
 }
 
-function drawWorld() {
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = color(...SKY);
-  ctx.fillRect(0, 0, W, H);
-
+function drawGround() {
   ctx.fillStyle = color(...GROUND);
   ctx.fillRect(0, groundY, W, H - groundY);
+}
 
+function drawRamps() {
   for (const [startX, endX, startY, endY] of ramps) {
     const points = [
       [startX - camX, startY],
@@ -386,7 +396,9 @@ function drawWorld() {
     ctx.fillStyle = color(...GROUND);
     ctx.fill();
   }
+}
 
+function drawGaps() {
   for (const [start, end] of gaps) {
     const dx = start - camX;
     const dw = end - start;
@@ -395,18 +407,20 @@ function drawWorld() {
       ctx.fillRect(dx, groundY, dw, H - groundY);
     }
   }
+}
 
-  if (goalDistance > 0) {
-    const goalScreenX = goalDistance - camX;
-    if (goalScreenX >= -30 && goalScreenX <= W + 30) {
-      ctx.fillStyle = '#ffd700';
-      ctx.fillRect(goalScreenX - 3, 300, 6, 130);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(goalScreenX - 20, 290, 40, 10);
-      ctx.fillRect(goalScreenX - 20, 420, 40, 10);
-    }
+function drawGoal() {
+  const goalScreenX = goalDistance - camX;
+  if (goalScreenX >= -30 && goalScreenX <= W + 30) {
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(goalScreenX - 3, 300, 6, 130);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(goalScreenX - 20, 290, 40, 10);
+    ctx.fillRect(goalScreenX - 20, 420, 40, 10);
   }
+}
 
+function drawPortals() {
   for (let level = 1; level < totalLevels; level += 1) {
     const safePortalX = getSafePortalX(level);
     const portalX = safePortalX - camX;
@@ -437,7 +451,9 @@ function drawWorld() {
       ctx.fillRect(tubeX - tubeW / 2 + 24, tubeY + 28, tubeW - 48, tubeH - 56);
     }
   }
+}
 
+function drawFireballs() {
   for (const fireball of fireballs) {
     const screenX = fireball.x - camX;
     if (screenX >= -40 && screenX <= W + 40) {
@@ -451,12 +467,16 @@ function drawWorld() {
       ctx.fill();
     }
   }
+}
 
+function drawPlayer() {
   ctx.beginPath();
   ctx.arc(player.x - camX, player.y, player.r, 0, Math.PI * 2);
   ctx.fillStyle = color(...BALL);
   ctx.fill();
+}
 
+function drawFlightItems() {
   for (const [itemX, itemY] of flightItems) {
     const screenX = itemX - camX;
     if (screenX >= 0 && screenX <= W) {
@@ -470,7 +490,9 @@ function drawWorld() {
       ctx.fill();
     }
   }
+}
 
+function drawHud() {
   const currentLevel = getLevelFromX(player.x);
 
   ctx.fillStyle = color(...TEXT);
@@ -483,31 +505,57 @@ function drawWorld() {
   } else if (hasFlight) {
     ctx.fillText('Flug bereit!', 14, 112);
   }
+}
 
-  if (levelFlashTimer > 0) {
-    const alpha = Math.min(1, levelFlashTimer / 30);
-    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = `rgba(0, 0, 0, ${0.6 - alpha * 0.4})`;
-    ctx.font = '48px Arial';
-    ctx.fillText(`LEVEL ${currentLevel}`, 330, 150);
-    levelFlashTimer -= 1;
+function drawLevelFlash() {
+  if (levelFlashTimer <= 0) {
+    return;
   }
 
-  if (gameOver) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = won ? '#ffd700' : '#ff4d4d';
-    ctx.font = '72px Arial';
-    ctx.fillText(won ? 'GEWONNEN!' : 'GAME OVER', 180, 180);
-    ctx.font = '28px Arial';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(won ? 'Du hast das Ziel erreicht!' : 'Du bist in der Lava gelandet.', 220, 245);
-    ctx.strokeStyle = '#ffffff';
-    ctx.strokeRect(restartButton.x, restartButton.y, restartButton.w, restartButton.h);
-    ctx.strokeRect(restartButton.x + 8, restartButton.y + 8, restartButton.w - 16, restartButton.h - 16);
-    ctx.fillText('Neustart', 365, 292);
+  const currentLevel = getLevelFromX(player.x);
+  const alpha = Math.min(1, levelFlashTimer / 30);
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = `rgba(0, 0, 0, ${0.6 - alpha * 0.4})`;
+  ctx.font = '48px Arial';
+  ctx.fillText(`LEVEL ${currentLevel}`, 330, 150);
+  levelFlashTimer -= 1;
+}
+
+function drawGameOver() {
+  if (!gameOver) {
+    return;
   }
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = won ? '#ffd700' : '#ff4d4d';
+  ctx.font = '72px Arial';
+  ctx.fillText(won ? 'GEWONNEN!' : 'GAME OVER', 180, 180);
+  ctx.font = '28px Arial';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(won ? 'Du hast das Ziel erreicht!' : 'Du bist in der Lava gelandet.', 220, 245);
+  ctx.strokeStyle = '#ffffff';
+  ctx.strokeRect(restartButton.x, restartButton.y, restartButton.w, restartButton.h);
+  ctx.strokeRect(restartButton.x + 8, restartButton.y + 8, restartButton.w - 16, restartButton.h - 16);
+  ctx.fillText('Neustart', 365, 292);
+}
+
+function drawWorld() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = color(...SKY);
+  ctx.fillRect(0, 0, W, H);
+  drawGround();
+  drawRamps();
+  drawGaps();
+  drawGoal();
+  drawPortals();
+  drawFireballs();
+  drawPlayer();
+  drawFlightItems();
+  drawHud();
+  drawLevelFlash();
+  drawGameOver();
 }
 
 function loop() {
@@ -554,55 +602,28 @@ document.addEventListener('keydown', (event) => {
 });
 document.addEventListener('keyup', handleKeyUp);
 
+function setControlState(action, isPressed) {
+  if (action === CONTROL_ACTIONS.LEFT) {
+    keys.left = isPressed;
+  } else if (action === CONTROL_ACTIONS.RIGHT) {
+    keys.right = isPressed;
+  } else if (action === CONTROL_ACTIONS.JUMP) {
+    keys.space = isPressed;
+  }
+}
+
 if (mobileControls) {
   mobileControls.addEventListener('touchstart', (event) => {
     event.preventDefault();
   }, { passive: false });
 
   mobileControls.querySelectorAll('.control-btn').forEach((button) => {
-    button.addEventListener('touchstart', () => {
-      const action = button.dataset.action;
-      if (action === 'left') {
-        keys.left = true;
-      } else if (action === 'right') {
-        keys.right = true;
-      } else if (action === 'jump') {
-        keys.space = true;
-      }
-    });
+    const action = button.dataset.action;
 
-    button.addEventListener('touchend', () => {
-      const action = button.dataset.action;
-      if (action === 'left') {
-        keys.left = false;
-      } else if (action === 'right') {
-        keys.right = false;
-      } else if (action === 'jump') {
-        keys.space = false;
-      }
-    });
-
-    button.addEventListener('mousedown', () => {
-      const action = button.dataset.action;
-      if (action === 'left') {
-        keys.left = true;
-      } else if (action === 'right') {
-        keys.right = true;
-      } else if (action === 'jump') {
-        keys.space = true;
-      }
-    });
-
-    button.addEventListener('mouseup', () => {
-      const action = button.dataset.action;
-      if (action === 'left') {
-        keys.left = false;
-      } else if (action === 'right') {
-        keys.right = false;
-      } else if (action === 'jump') {
-        keys.space = false;
-      }
-    });
+    button.addEventListener('touchstart', () => setControlState(action, true));
+    button.addEventListener('touchend', () => setControlState(action, false));
+    button.addEventListener('mousedown', () => setControlState(action, true));
+    button.addEventListener('mouseup', () => setControlState(action, false));
   });
 }
 
