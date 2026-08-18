@@ -71,25 +71,46 @@ function isGap(px) {
   return gaps.some(([start, end]) => start <= px && px <= end);
 }
 
+function isSafeGround(px, padding = 120) {
+  if (isGap(px)) {
+    return false;
+  }
+
+  for (const [start, end] of gaps) {
+    if (px >= start - padding && px <= end + padding) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getSafeSpawnX(startX, maxDistance = 600) {
   for (let offset = 0; offset <= maxDistance; offset += 1) {
     const rightX = startX + offset;
     const leftX = startX - offset;
-    if (!isGap(rightX)) {
+    if (isSafeGround(rightX, 120)) {
       return rightX;
     }
-    if (!isGap(leftX)) {
+    if (isSafeGround(leftX, 120)) {
       return leftX;
     }
   }
-  return startX;
+
+  for (let x = Math.max(0, startX - maxDistance); x <= startX + maxDistance; x += 1) {
+    if (isSafeGround(x, 120)) {
+      return x;
+    }
+  }
+
+  return Math.max(0, startX);
 }
 
 function getSafePortalX(level) {
   const targetX = level * levelDistance;
   const startX = Math.max(0, targetX - 800);
   for (let x = targetX; x >= startX; x -= 1) {
-    if (!isGap(x)) {
+    if (isSafeGround(x, 150)) {
       return x;
     }
   }
@@ -143,10 +164,23 @@ function spawnFireball() {
     return;
   }
 
-  const burstCount = level >= 6 ? 2 : level >= 4 ? 1 : 1;
+  const burstCount = level >= 6 ? 2 : 1;
   for (let burst = 0; burst < burstCount; burst += 1) {
-    const [start, end] = lavaZones[rand(0, lavaZones.length - 1)];
+    const availableZones = lavaZones.filter(([start, end]) => {
+      const center = (start + end) / 2;
+      return Math.abs(center - player.x) > 220;
+    });
+
+    if (availableZones.length === 0) {
+      return;
+    }
+
+    const [start, end] = availableZones[rand(0, availableZones.length - 1)];
     const x = rand(start + 18, end - 18);
+    if (Math.abs(x - player.x) < 200) {
+      continue;
+    }
+
     fireballs.push({
       x,
       y: groundY + 8,
@@ -257,7 +291,14 @@ function updatePhysics() {
   if (currentLevel > previousLevel) {
     const levelStart = (currentLevel - 1) * levelDistance;
     const safeSpawnX = getSafeSpawnX(levelStart + 120, 500);
-    player.x = Math.max(player.x, safeSpawnX + 40);
+    const spawnX = Number.isFinite(safeSpawnX) ? safeSpawnX : levelStart + 100;
+
+    fireballs = [];
+    fireballTimer = 180;
+    player.x = spawnX + 35;
+    player.y = 320;
+    player.vy = 0;
+    onGround = false;
     levelFlashTimer = 90;
   }
 
