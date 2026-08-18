@@ -71,6 +71,20 @@ function isGap(px) {
   return gaps.some(([start, end]) => start <= px && px <= end);
 }
 
+function getSafeSpawnX(startX, maxDistance = 600) {
+  for (let offset = 0; offset <= maxDistance; offset += 1) {
+    const rightX = startX + offset;
+    const leftX = startX - offset;
+    if (!isGap(rightX)) {
+      return rightX;
+    }
+    if (!isGap(leftX)) {
+      return leftX;
+    }
+  }
+  return startX;
+}
+
 function getSafePortalX(level) {
   const targetX = level * levelDistance;
   const startX = Math.max(0, targetX - 800);
@@ -241,6 +255,9 @@ function updatePhysics() {
   const currentLevel = getLevelFromX(player.x);
 
   if (currentLevel > previousLevel) {
+    const levelStart = (currentLevel - 1) * levelDistance;
+    const safeSpawnX = getSafeSpawnX(levelStart + 120, 500);
+    player.x = Math.max(player.x, safeSpawnX + 40);
     levelFlashTimer = 90;
   }
 
