@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ball Jump and Run</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Ball Jump and Run</h1>
+      <p id="hint">
+        Bewege dich mit den Pfeiltasten, springe mit der Leertaste und sammel
+        Flug-Items ein.
+      </p>
+      <canvas id="game" width="900" height="520" aria-label="Ball Jump and Run"></canvas>
+      <div class="controls" id="controls">
+        <span>Links / Rechts: bewegen</span>
+        <span>Leertaste: springen / fliegen</span>
+      </div>
+      <div class="mobile-controls" id="mobile-controls" aria-label="Touch-Steuerung">
+        <button class="control-btn" data-action="left" type="button">◀</button>
+        <button class="control-btn jump-btn" data-action="jump" type="button">Springen</button>
+        <button class="control-btn" data-action="right" type="button">▶</button>
+      </div>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>
