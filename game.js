@@ -6,7 +6,7 @@ const H = 520;
 const SKY = [170, 220, 255];
 const GROUND = [70, 170, 70];
 const LAVA = [235, 70, 20];
-const BALL = [0, 255, 0];
+const BALL = [0, 0, 255];
 const TEXT = [30, 30, 30];
 
 const player = {
@@ -32,9 +32,14 @@ let flightItems = [];
 let hasFlight = false;
 let flightTimer = 0;
 let flightActive = false;
+let fireballs = [];
+let fireballTimer = 0;
+let levelFlashTimer = 0;
 let spaceWasPressed = false;
 let camX = 0;
-const goalDistance = 10000;
+const totalLevels = 10;
+const levelDistance = 5000;
+const goalDistance = totalLevels * levelDistance;
 let gameOver = false;
 let won = false;
 const restartButton = { x: 320, y: 260, w: 260, h: 60 };
@@ -54,12 +59,27 @@ function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function getLevelFromX(px) {
+  return Math.min(totalLevels, Math.max(1, Math.floor(px / levelDistance) + 1));
+}
+
 function color(r, g, b) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
 function isGap(px) {
   return gaps.some(([start, end]) => start <= px && px <= end);
+}
+
+function getSafePortalX(level) {
+  const targetX = level * levelDistance;
+  const startX = Math.max(0, targetX - 800);
+  for (let x = targetX; x >= startX; x -= 1) {
+    if (!isGap(x)) {
+      return x;
+    }
+  }
+  return targetX;
 }
 
 function isSafeRamp(startX, endX) {
@@ -73,22 +93,54 @@ function isSafeRamp(startX, endX) {
 
 function growLevel(targetX) {
   while (nextGapStart < targetX) {
-    const gapW = rand(80, 125);
+    const level = getLevelFromX(nextGapStart + 200);
+    const gapW = rand(90 + level * 16, 150 + level * 18);
     const gapEnd = nextGapStart + gapW;
     gaps.push([nextGapStart, gapEnd]);
-    nextGapStart = gapEnd + rand(220, 380);
+    const spacingMin = 180 + level * 20;
+    const spacingMax = Math.min(1000, 260 + level * 32);
+    nextGapStart = gapEnd + rand(spacingMin, spacingMax);
   }
 }
 
 function spawnRamps(targetX) {
   while (nextRampX < targetX) {
     const startX = nextRampX;
-    const endX = startX + 150;
+    const level = getLevelFromX(startX);
+    const rampLength = Math.max(90, 140 - (level - 1) * 8);
+    const endX = startX + rampLength;
     if (isSafeRamp(startX, endX)) {
-      ramps.push([startX, endX, groundY, groundY - 100]);
-      flightItems.push([startX + 75, groundY - 140]);
+      const rampHeight = Math.max(55, 95 - (level - 1) * 6);
+      ramps.push([startX, endX, groundY, groundY - rampHeight]);
+      flightItems.push([startX + rampLength / 2, groundY - rampHeight - 40]);
     }
-    nextRampX += rand(2000, 4000);
+    nextRampX += rand(1600, 3000) - Math.min(700, (level - 1) * 120);
+  }
+}
+
+function spawnFireball() {
+  if (gaps.length === 0) {
+    return;
+  }
+
+  const level = getLevelFromX(player.x);
+  const lavaZones = gaps.filter(([start, end]) => end > player.x - 300 && start < player.x + 1800);
+  if (lavaZones.length === 0) {
+    return;
+  }
+
+  const burstCount = level >= 6 ? 2 : level >= 4 ? 1 : 1;
+  for (let burst = 0; burst < burstCount; burst += 1) {
+    const [start, end] = lavaZones[rand(0, lavaZones.length - 1)];
+    const x = rand(start + 18, end - 18);
+    fireballs.push({
+      x,
+      y: groundY + 8,
+      vx: (rand(-2, 2) * 0.8) + (level - 1) * 0.2,
+      vy: -rand(8 + (level - 1), 12 + level),
+      r: rand(12, 18) + Math.min(8, level - 1),
+      life: rand(110, 190) - (level - 1) * 8,
+    });
   }
 }
 
@@ -119,6 +171,8 @@ function resetGame() {
   hasFlight = false;
   flightTimer = 0;
   flightActive = false;
+  fireballs = [];
+  fireballTimer = 0;
   jumpsLeft = extraJumps;
   spaceWasPressed = false;
   camX = 0;
@@ -183,6 +237,42 @@ function handleInput() {
 }
 
 function updatePhysics() {
+  const previousLevel = getLevelFromX(player.x - 1);
+  const currentLevel = getLevelFromX(player.x);
+
+  if (currentLevel > previousLevel) {
+    levelFlashTimer = 90;
+  }
+
+  if (currentLevel >= 2) {
+    fireballTimer -= 1;
+    if (fireballTimer <= 0) {
+      spawnFireball();
+      fireballTimer = Math.max(18, rand(50, 100) - (currentLevel - 2) * 10);
+    }
+  } else {
+    fireballTimer = 0;
+  }
+
+  for (let i = fireballs.length - 1; i >= 0; i -= 1) {
+    const fireball = fireballs[i];
+    fireball.x += fireball.vx;
+    fireball.y += fireball.vy;
+    fireball.vy += 0.22;
+    fireball.life -= 1;
+
+    if (fireball.y > groundY + 40 || fireball.life <= 0 || fireball.x < -60 || fireball.x > goalDistance + 200) {
+      fireballs.splice(i, 1);
+      continue;
+    }
+
+    if (Math.hypot(player.x - fireball.x, player.y - fireball.y) < player.r + fireball.r) {
+      gameOver = true;
+      won = false;
+      return;
+    }
+  }
+
   player.vy += player.gravity;
   player.y += player.vy;
 
@@ -259,6 +349,51 @@ function drawWorld() {
     }
   }
 
+  for (let level = 1; level < totalLevels; level += 1) {
+    const safePortalX = getSafePortalX(level);
+    const portalX = safePortalX - camX;
+    if (portalX >= -80 && portalX <= W + 80) {
+      const tubeX = portalX;
+      const tubeY = 200;
+      const pulse = 1 + Math.sin(performance.now() * 0.006 + level) * 0.18;
+      const tubeW = 52 * pulse;
+      const tubeH = 180 * pulse;
+
+      ctx.fillStyle = 'rgba(110, 231, 255, 0.18)';
+      ctx.fillRect(tubeX - 70, tubeY - 20, 140, tubeH + 40);
+
+      ctx.fillStyle = '#121a2d';
+      ctx.fillRect(tubeX - tubeW / 2, tubeY, tubeW, tubeH);
+
+      ctx.strokeStyle = `rgba(110, 231, 255, ${0.45 + pulse * 0.25})`;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(tubeX - tubeW / 2 + 5, tubeY + 8, tubeW - 10, tubeH - 16);
+
+      ctx.fillStyle = `rgba(110, 231, 255, ${0.5 + pulse * 0.3})`;
+      ctx.fillRect(tubeX - tubeW / 2 + 9, tubeY + 12, tubeW - 18, tubeH - 24);
+
+      ctx.fillStyle = '#d0f8ff';
+      ctx.fillRect(tubeX - tubeW / 2 + 18, tubeY + 22, tubeW - 36, tubeH - 44);
+
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(tubeX - tubeW / 2 + 24, tubeY + 28, tubeW - 48, tubeH - 56);
+    }
+  }
+
+  for (const fireball of fireballs) {
+    const screenX = fireball.x - camX;
+    if (screenX >= -40 && screenX <= W + 40) {
+      ctx.beginPath();
+      ctx.arc(screenX, fireball.y, fireball.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff5a1f';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(screenX - fireball.r * 0.35, fireball.y - fireball.r * 0.25, fireball.r * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd27d';
+      ctx.fill();
+    }
+  }
+
   ctx.beginPath();
   ctx.arc(player.x - camX, player.y, player.r, 0, Math.PI * 2);
   ctx.fillStyle = color(...BALL);
@@ -278,14 +413,27 @@ function drawWorld() {
     }
   }
 
+  const currentLevel = getLevelFromX(player.x);
+
   ctx.fillStyle = color(...TEXT);
   ctx.font = '20px Arial';
   ctx.fillText('Pfeile: bewegen | Leertaste: springen / fliegen', 14, 28);
   ctx.fillText(`Distanz: ${Math.floor(player.x)} / ${goalDistance}`, 14, 56);
+  ctx.fillText(`Level: ${currentLevel} / ${totalLevels}`, 14, 84);
   if (hasFlight && flightTimer > 0) {
-    ctx.fillText('Flug aktiv! Halte Leertaste für den Flug', 14, 84);
+    ctx.fillText('Flug aktiv! Halte Leertaste für den Flug', 14, 112);
   } else if (hasFlight) {
-    ctx.fillText('Flug bereit!', 14, 84);
+    ctx.fillText('Flug bereit!', 14, 112);
+  }
+
+  if (levelFlashTimer > 0) {
+    const alpha = Math.min(1, levelFlashTimer / 30);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.6 - alpha * 0.4})`;
+    ctx.font = '48px Arial';
+    ctx.fillText(`LEVEL ${currentLevel}`, 330, 150);
+    levelFlashTimer -= 1;
   }
 
   if (gameOver) {
