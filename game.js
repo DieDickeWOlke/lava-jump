@@ -33,6 +33,7 @@ let flightTimer = 0;
 let fireballs = [];
 let fireballTimer = 0;
 let levelFlashTimer = 0;
+let lastLevel = 1;
 let spaceWasPressed = false;
 let camX = 0;
 const totalLevels = 10;
@@ -219,6 +220,7 @@ function resetGame() {
   fireballs = [];
   fireballTimer = 0;
   jumpsLeft = extraJumps;
+  lastLevel = getLevelFromX(player.x);
   spaceWasPressed = false;
   camX = 0;
   gameOver = false;
@@ -294,10 +296,10 @@ function handleInput() {
 }
 
 function updatePhysics() {
-  const previousLevel = getLevelFromX(player.x - 1);
   const currentLevel = getLevelFromX(player.x);
+  const levelChanged = currentLevel !== lastLevel;
 
-  if (currentLevel > previousLevel) {
+  if (levelChanged) {
     const levelStart = (currentLevel - 1) * levelDistance;
     const safeSpawnX = getSafeSpawnX(levelStart + 120, 500);
     const spawnX = Number.isFinite(safeSpawnX) ? safeSpawnX : levelStart + 100;
@@ -309,6 +311,7 @@ function updatePhysics() {
     player.vy = 0;
     onGround = false;
     levelFlashTimer = 90;
+    lastLevel = currentLevel;
   }
 
   if (currentLevel >= 2) {
