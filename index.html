@@ -13,15 +13,15 @@
         Bewege dich mit den Pfeiltasten, springe mit der Leertaste und sammel
         Flug-Items ein.
       </p>
-      <canvas id="game" width="900" height="520" aria-label="Ball Jump and Run"></canvas>
-      <div class="controls" id="controls">
-        <span>Links / Rechts: bewegen</span>
-        <span>Leertaste: springen / fliegen</span>
-      </div>
-      <div class="mobile-controls" id="mobile-controls" aria-label="Touch-Steuerung">
-        <button class="control-btn" data-action="left" type="button">◀</button>
-        <button class="control-btn jump-btn" data-action="jump" type="button">Springen</button>
-        <button class="control-btn" data-action="right" type="button">▶</button>
+      <div class="game-container">
+        <canvas id="game" width="900" height="520" aria-label="Ball Jump and Run"></canvas>
+        <div class="mobile-controls" id="mobile-controls" aria-label="Touch-Steuerung">
+          <div class="move-group">
+            <button class="control-btn" data-action="left" type="button">◀</button>
+            <button class="control-btn" data-action="right" type="button">▶</button>
+          </div>
+          <button class="control-btn jump-btn" data-action="jump" type="button">Springen</button>
+        </div>
       </div>
     </main>
 
