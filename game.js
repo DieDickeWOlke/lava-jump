@@ -14,7 +14,7 @@ const player = {
   x: 120,
   y: 320,
   vy: 0,
-  speed: 5,
+  speed: 3.5,
   jump: 13,
   gravity: 0.6,
 };
@@ -48,6 +48,7 @@ const levelDistance = 5000;
 const goalDistance = totalLevels * levelDistance;
 let gameOver = false;
 let won = false;
+let gameOverReason = '';
 const INVINCIBLE_DURATION = 3 * 60;
 let invincibleTimer = 0;
 const portalTriggerState = new Set();
@@ -291,6 +292,7 @@ function resetGame() {
   camX = 0;
   gameOver = false;
   won = false;
+  gameOverReason = '';
   invincibleTimer = 0;
   portalTriggerState.clear();
 
@@ -434,8 +436,7 @@ function updatePhysics() {
         fireballs.splice(i, 1);
         continue;
       }
-      gameOver = true;
-      won = false;
+      endGame(false, 'Ein Feuerball hat dich getroffen.');
       return;
     }
   }
@@ -458,8 +459,7 @@ function updatePhysics() {
       player.y = lavaTopY - player.r - 1;
       player.vy = Math.min(player.vy, 1.5);
     } else {
-      gameOver = true;
-      won = false;
+      endGame(false, 'Du bist in der Lava gelandet.');
       return;
     }
   }
@@ -470,14 +470,12 @@ function updatePhysics() {
       player.vy = -2;
       return;
     }
-    gameOver = true;
-    won = false;
+    endGame(false, 'Du bist abgestürzt.');
     return;
   }
 
   if (player.x >= goalDistance) {
-    gameOver = true;
-    won = true;
+    endGame(true);
     return;
   }
 
@@ -699,6 +697,12 @@ function drawLevelFlash() {
   levelFlashTimer -= 1;
 }
 
+function endGame(isWon, reason = '') {
+  gameOver = true;
+  won = isWon;
+  gameOverReason = reason;
+}
+
 function drawGameOver() {
   if (!gameOver) {
     return;
@@ -711,7 +715,7 @@ function drawGameOver() {
   ctx.fillText(won ? 'GEWONNEN!' : 'GAME OVER', 180, 180);
   ctx.font = '28px Arial';
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(won ? 'Du hast das Ziel erreicht!' : 'Du bist in der Lava gelandet.', 220, 245);
+  ctx.fillText(won ? 'Du hast das Ziel erreicht!' : gameOverReason, 220, 245);
   ctx.strokeStyle = '#ffffff';
   ctx.strokeRect(restartButton.x, restartButton.y, restartButton.w, restartButton.h);
   ctx.strokeRect(restartButton.x + 8, restartButton.y + 8, restartButton.w - 16, restartButton.h - 16);
