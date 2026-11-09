@@ -5,7 +5,7 @@ const W = 900;
 const H = 520;
 const SKY = [170, 220, 255];
 const GROUND = [70, 170, 70];
-const LAVA = [235, 70, 20];
+const LAVA = [255, 120, 40];
 const BALL = [0, 0, 255];
 const TEXT = [30, 30, 30];
 
@@ -20,6 +20,7 @@ const player = {
 };
 
 const groundY = 430;
+const lavaTopY = groundY;
 let onGround = false;
 let gaps = [];
 let nextGapStart = 450;
@@ -41,6 +42,9 @@ const levelDistance = 5000;
 const goalDistance = totalLevels * levelDistance;
 let gameOver = false;
 let won = false;
+const INVINCIBLE_DURATION = 3 * 60;
+let invincibleTimer = 0;
+const portalTriggerState = new Set();
 const restartButton = { x: 320, y: 260, w: 260, h: 60 };
 
 const keys = { left: false, right: false, space: false };
@@ -225,6 +229,8 @@ function resetGame() {
   camX = 0;
   gameOver = false;
   won = false;
+  invincibleTimer = 0;
+  portalTriggerState.clear();
 
   growLevel(2000);
   spawnRamps(2000);
@@ -249,6 +255,30 @@ function collectFlightItem() {
       flightItems.splice(i, 1);
       break;
     }
+  }
+}
+
+function triggerPortalInvincibility() {
+  invincibleTimer = INVINCIBLE_DURATION;
+}
+
+function handlePortalInteraction() {
+  for (let level = 1; level < totalLevels; level += 1) {
+    const portalX = getSafePortalX(level);
+    const nearPortal = Math.abs(player.x - portalX) < 36 && player.y > 160 && player.y < 440;
+
+    if (nearPortal) {
+      if (!portalTriggerState.has(level)) {
+        portalTriggerState.add(level);
+        triggerPortalInvincibility();
+      }
+    } else {
+      portalTriggerState.delete(level);
+    }
+  }
+
+  if (invincibleTimer > 0) {
+    invincibleTimer -= 1;
   }
 }
 
@@ -292,6 +322,7 @@ function handleInput() {
   movePlayer();
   collectFlightItem();
   updateFlightState();
+  handlePortalInteraction();
   handleJumpInput();
 }
 
@@ -337,6 +368,10 @@ function updatePhysics() {
     }
 
     if (Math.hypot(player.x - fireball.x, player.y - fireball.y) < player.r + fireball.r) {
+      if (invincibleTimer > 0) {
+        fireballs.splice(i, 1);
+        continue;
+      }
       gameOver = true;
       won = false;
       return;
@@ -356,7 +391,23 @@ function updatePhysics() {
     onGround = false;
   }
 
+  if (isGap(player.x) && player.y + player.r >= lavaTopY) {
+    if (invincibleTimer > 0) {
+      player.y = lavaTopY - player.r - 1;
+      player.vy = Math.min(player.vy, 1.5);
+    } else {
+      gameOver = true;
+      won = false;
+      return;
+    }
+  }
+
   if (player.y - player.r > H) {
+    if (invincibleTimer > 0) {
+      player.y = H - 80;
+      player.vy = -2;
+      return;
+    }
     gameOver = true;
     won = false;
     return;
@@ -402,8 +453,32 @@ function drawGaps() {
     const dx = start - camX;
     const dw = end - start;
     if (dx < W && dx + dw > 0) {
-      ctx.fillStyle = color(...LAVA);
-      ctx.fillRect(dx, groundY, dw, H - groundY);
+      const pulse = 0.6 + Math.sin((start + performance.now() * 0.04) * 0.08) * 0.35;
+      ctx.fillStyle = `rgba(${255}, ${Math.round(120 + pulse * 80)}, ${Math.round(30 + pulse * 40)}, 1)`;
+      ctx.fillRect(dx, lavaTopY, dw, H - lavaTopY);
+
+      ctx.fillStyle = 'rgba(255, 255, 220, 0.96)';
+      for (let i = 0; i < Math.max(10, Math.floor(dw / 12)); i += 1) {
+        const bubbleX = dx + ((i + 1) * 16) + ((start * 1.4 + i * 11) % 22);
+        const bubbleY = lavaTopY + 14 + (((i * 19 + performance.now() * 0.22) % (H - lavaTopY - 18)));
+        const bubbleR = 12 + ((i % 5) * 4);
+        ctx.beginPath();
+        ctx.arc(bubbleX, bubbleY, bubbleR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = 'rgba(255, 255, 180, 0.8)';
+      ctx.fillRect(dx, lavaTopY, dw, 18);
+
+      ctx.fillStyle = 'rgba(255, 180, 80, 0.32)';
+      ctx.fillRect(dx, lavaTopY + 8, dw, H - lavaTopY - 8);
+
+      ctx.fillStyle = 'rgba(255, 120, 20, 0.22)';
+      for (let i = 0; i < Math.max(3, Math.floor(dw / 50)); i += 1) {
+        const glowX = dx + 10 + i * 28 + ((start + i) % 16);
+        const glowY = lavaTopY + 8 + ((i * 14 + performance.now() * 0.12) % (H - lavaTopY - 24));
+        ctx.fillRect(glowX, glowY, 14, 6);
+      }
     }
   }
 }
@@ -471,7 +546,9 @@ function drawFireballs() {
 function drawPlayer() {
   ctx.beginPath();
   ctx.arc(player.x - camX, player.y, player.r, 0, Math.PI * 2);
-  ctx.fillStyle = color(...BALL);
+  ctx.fillStyle = invincibleTimer > 0
+    ? (Math.sin(performance.now() * 0.02) > 0 ? '#8b5cf6' : '#c4b5fd')
+    : color(...BALL);
   ctx.fill();
 }
 
@@ -499,10 +576,13 @@ function drawHud() {
   ctx.fillText('Pfeile: bewegen | Leertaste: springen / fliegen', 14, 28);
   ctx.fillText(`Distanz: ${Math.floor(player.x)} / ${goalDistance}`, 14, 56);
   ctx.fillText(`Level: ${currentLevel} / ${totalLevels}`, 14, 84);
+  if (invincibleTimer > 0) {
+    ctx.fillText(`Unbesiegbar: ${Math.ceil(invincibleTimer / 60)}s`, 14, 112);
+  }
   if (hasFlight && flightTimer > 0) {
-    ctx.fillText('Flug aktiv! Halte Leertaste für den Flug', 14, 112);
+    ctx.fillText('Flug aktiv! Halte Leertaste für den Flug', 14, 140);
   } else if (hasFlight) {
-    ctx.fillText('Flug bereit!', 14, 112);
+    ctx.fillText('Flug bereit!', 14, 140);
   }
 }
 
