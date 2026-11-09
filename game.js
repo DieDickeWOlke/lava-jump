@@ -19,6 +19,12 @@ const player = {
   gravity: 0.6,
 };
 
+const ballTrail = [];
+const TRAIL_LIFETIME = 700;
+let lastTrailTime = 0;
+let lastTrailX = player.x;
+let lastTrailY = player.y;
+
 const groundY = 430;
 const lavaTopY = groundY;
 let onGround = false;
@@ -55,7 +61,59 @@ const CONTROL_ACTIONS = {
 };
 const mobileControls = document.getElementById('mobile-controls');
 const hint = document.getElementById('hint');
+const app = document.querySelector('.app');
+const fullscreenToggle = document.getElementById('fullscreen-toggle');
+const startScreen = document.getElementById('start-screen');
+const startButton = document.getElementById('start-button');
 const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+let fullscreenAttempted = false;
+let gameStarted = false;
+
+async function enterFullscreen() {
+  if (document.fullscreenElement === app || app.classList.contains('app-fullscreen')) {
+    return;
+  }
+
+  try {
+    if (app.requestFullscreen) {
+      await app.requestFullscreen();
+    } else {
+      app.classList.add('app-fullscreen');
+    }
+  } catch {
+    app.classList.add('app-fullscreen');
+  }
+}
+
+function updateFullscreenButton() {
+  const isFullscreen = document.fullscreenElement === app || app.classList.contains('app-fullscreen');
+  const label = isFullscreen ? 'Vollbild verlassen' : 'Vollbild aktivieren';
+  fullscreenToggle.setAttribute('aria-label', label);
+  fullscreenToggle.title = label;
+  fullscreenToggle.textContent = isFullscreen ? '×' : '⛶';
+}
+
+async function toggleFullscreen() {
+  if (document.fullscreenElement === app) {
+    await document.exitFullscreen();
+  } else if (app.classList.contains('app-fullscreen')) {
+    app.classList.remove('app-fullscreen');
+  } else {
+    await enterFullscreen();
+  }
+  updateFullscreenButton();
+}
+
+function tryEnterFullscreen(event) {
+  if (event.target.closest('#fullscreen-toggle')) {
+    return;
+  }
+  if (fullscreenAttempted) {
+    return;
+  }
+  fullscreenAttempted = true;
+  enterFullscreen().finally(updateFullscreenButton);
+}
 
 function updateHint() {
   if (isTouchDevice) {
@@ -110,15 +168,8 @@ function getSafeSpawnX(startX, maxDistance = 1600) {
   return Math.max(0, startX);
 }
 
-function getSafePortalX(level) {
-  const targetX = level * levelDistance;
-  const startX = Math.max(0, targetX - 800);
-  for (let x = targetX; x >= startX; x -= 1) {
-    if (isSafeGround(x, 150)) {
-      return x;
-    }
-  }
-  return targetX;
+function getPortalX(level) {
+  return level * levelDistance;
 }
 
 function isSafeRamp(startX, endX) {
@@ -197,7 +248,7 @@ function spawnFireball() {
       y: groundY + 8,
       vx: (rand(-2, 2) * 0.8) + (level - 1) * 0.2,
       vy: -rand(8, 12),
-      r: rand(12, 18) + Math.min(8, level - 1),
+      r: level === 8 ? 15 : rand(12, 18) + Math.min(8, level - 1),
       life: rand(110, 190) - (level - 1) * 8,
     });
   }
@@ -220,6 +271,10 @@ function resetGame() {
   player.x = 120;
   player.y = 320;
   player.vy = 0;
+  ballTrail.length = 0;
+  lastTrailTime = 0;
+  lastTrailX = player.x;
+  lastTrailY = player.y;
   onGround = false;
   gaps = [];
   nextGapStart = 450;
@@ -271,7 +326,7 @@ function triggerPortalInvincibility() {
 
 function handlePortalInteraction() {
   for (let level = 1; level < totalLevels; level += 1) {
-    const portalX = getSafePortalX(level);
+    const portalX = getPortalX(level);
     const nearPortal = Math.abs(player.x - portalX) < 36 && player.y > 160 && player.y < 440;
 
     if (nearPortal) {
@@ -504,8 +559,8 @@ function drawGoal() {
 
 function drawPortals() {
   for (let level = 1; level < totalLevels; level += 1) {
-    const safePortalX = getSafePortalX(level);
-    const portalX = safePortalX - camX;
+    const worldPortalX = getPortalX(level);
+    const portalX = worldPortalX - camX;
     if (portalX >= -80 && portalX <= W + 80) {
       const tubeX = portalX;
       const tubeY = 200;
@@ -558,6 +613,41 @@ function drawPlayer() {
     ? (Math.sin(performance.now() * 0.02) > 0 ? '#8b5cf6' : '#c4b5fd')
     : color(...BALL);
   ctx.fill();
+}
+
+function updateBallTrail(now) {
+  while (ballTrail.length > 0 && now - ballTrail[0].createdAt >= TRAIL_LIFETIME) {
+    ballTrail.shift();
+  }
+
+  const moved = Math.hypot(player.x - lastTrailX, player.y - lastTrailY) > 1;
+  if (moved && now - lastTrailTime >= 18) {
+    ballTrail.push({
+      x: player.x,
+      y: player.y,
+      createdAt: now,
+      hue: (now * 0.4) % 360,
+      radius: 5 + Math.random() * 3,
+    });
+    lastTrailTime = now;
+  }
+
+  lastTrailX = player.x;
+  lastTrailY = player.y;
+}
+
+function drawBallTrail(now) {
+  const sizeMultiplier = invincibleTimer > 0 ? 2 : 1;
+  for (const particle of ballTrail) {
+    const alpha = Math.max(0, 1 - (now - particle.createdAt) / TRAIL_LIFETIME);
+    const radius = particle.radius * (0.35 + alpha * 0.65) * sizeMultiplier;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = `hsl(${particle.hue}, 100%, 60%)`;
+    ctx.beginPath();
+    ctx.arc(particle.x - camX, particle.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawFlightItems() {
@@ -638,6 +728,7 @@ function drawWorld() {
   drawGoal();
   drawPortals();
   drawFireballs();
+  drawBallTrail(performance.now());
   drawPlayer();
   drawFlightItems();
   drawHud();
@@ -645,11 +736,12 @@ function drawWorld() {
   drawGameOver();
 }
 
-function loop() {
-  if (!gameOver) {
+function loop(now) {
+  if (gameStarted && !gameOver) {
     handleInput();
     updatePhysics();
   }
+  updateBallTrail(now);
   drawWorld();
   requestAnimationFrame(loop);
 }
@@ -681,10 +773,34 @@ function handleKeyUp(event) {
   }
 }
 
+function startGame() {
+  if (gameStarted) {
+    return;
+  }
+  gameStarted = true;
+  startScreen.hidden = true;
+}
+
+function restartToStartScreen() {
+  resetGame();
+  gameStarted = false;
+  startScreen.hidden = false;
+  keys.left = false;
+  keys.right = false;
+  keys.space = false;
+}
+
 document.addEventListener('keydown', (event) => {
+  if (!gameStarted) {
+    if (event.code === 'Enter' || event.code === 'Space') {
+      event.preventDefault();
+      startGame();
+    }
+    return;
+  }
   handleKeyDown(event);
   if (gameOver && event.code === 'Enter') {
-    resetGame();
+    restartToStartScreen();
   }
 });
 document.addEventListener('keyup', handleKeyUp);
@@ -700,19 +816,30 @@ function setControlState(action, isPressed) {
 }
 
 if (mobileControls) {
-  mobileControls.addEventListener('touchstart', (event) => {
-    event.preventDefault();
-  }, { passive: false });
-
   mobileControls.querySelectorAll('.control-btn').forEach((button) => {
     const action = button.dataset.action;
+    const releaseControl = () => {
+      button.classList.remove('is-pressed');
+      setControlState(action, false);
+    };
 
-    button.addEventListener('touchstart', () => setControlState(action, true));
-    button.addEventListener('touchend', () => setControlState(action, false));
-    button.addEventListener('mousedown', () => setControlState(action, true));
-    button.addEventListener('mouseup', () => setControlState(action, false));
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      button.setPointerCapture(event.pointerId);
+      button.classList.add('is-pressed');
+      setControlState(action, true);
+    });
+    button.addEventListener('pointerup', releaseControl);
+    button.addEventListener('pointercancel', releaseControl);
+    button.addEventListener('lostpointercapture', releaseControl);
   });
 }
+
+fullscreenToggle.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+app.addEventListener('pointerup', tryEnterFullscreen, { once: true });
+document.addEventListener('keydown', tryEnterFullscreen, { once: true });
+startButton.addEventListener('click', startGame);
 
 canvas.addEventListener('click', (event) => {
   if (!gameOver) {
@@ -724,7 +851,7 @@ canvas.addEventListener('click', (event) => {
   const x = (event.clientX - rect.left) * scaleX;
   const y = (event.clientY - rect.top) * scaleY;
   if (x >= restartButton.x && x <= restartButton.x + restartButton.w && y >= restartButton.y && y <= restartButton.y + restartButton.h) {
-    resetGame();
+    restartToStartScreen();
   }
 });
 window.addEventListener('blur', () => {
