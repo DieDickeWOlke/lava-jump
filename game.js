@@ -142,6 +142,12 @@ function growLevel(targetX) {
   }
 }
 
+function createRampFlightItem(startX, endX, startY, endY) {
+  const middleX = (startX + endX) / 2;
+  const heightY = Math.min(startY, endY) - 40;
+  return [middleX, heightY];
+}
+
 function spawnRamps(targetX) {
   while (nextRampX < targetX) {
     const startX = nextRampX;
@@ -150,8 +156,9 @@ function spawnRamps(targetX) {
     const endX = startX + rampLength;
     if (isSafeRamp(startX, endX)) {
       const rampHeight = Math.max(55, 95 - (level - 1) * 6);
-      ramps.push([startX, endX, groundY, groundY - rampHeight]);
-      flightItems.push([startX + rampLength / 2, groundY - rampHeight - 40]);
+      const ramp = [startX, endX, groundY, groundY - rampHeight];
+      ramps.push(ramp);
+      flightItems.push(createRampFlightItem(...ramp));
     }
     nextRampX += rand(1600, 3000) - Math.min(700, (level - 1) * 120);
   }
@@ -454,13 +461,14 @@ function drawGaps() {
     const dw = end - start;
     if (dx < W && dx + dw > 0) {
       const pulse = 0.6 + Math.sin((start + performance.now() * 0.04) * 0.08) * 0.35;
-      ctx.fillStyle = `rgba(${255}, ${Math.round(120 + pulse * 80)}, ${Math.round(30 + pulse * 40)}, 1)`;
+      ctx.fillStyle = `rgba(${Math.round(200 + pulse * 55)}, ${Math.round(20 + pulse * 30)}, ${Math.round(10 + pulse * 10)}, 1)`;
       ctx.fillRect(dx, lavaTopY, dw, H - lavaTopY);
 
       ctx.fillStyle = 'rgba(255, 255, 220, 0.96)';
+      const bubbleTravel = H - lavaTopY - 18;
       for (let i = 0; i < Math.max(10, Math.floor(dw / 12)); i += 1) {
         const bubbleX = dx + ((i + 1) * 16) + ((start * 1.4 + i * 11) % 22);
-        const bubbleY = lavaTopY + 14 + (((i * 19 + performance.now() * 0.22) % (H - lavaTopY - 18)));
+        const bubbleY = lavaTopY + 14 + ((bubbleTravel - ((i * 19 + performance.now() * 0.22) % bubbleTravel)) % bubbleTravel);
         const bubbleR = 12 + ((i % 5) * 4);
         ctx.beginPath();
         ctx.arc(bubbleX, bubbleY, bubbleR, 0, Math.PI * 2);
@@ -470,7 +478,7 @@ function drawGaps() {
       ctx.fillStyle = 'rgba(255, 255, 180, 0.8)';
       ctx.fillRect(dx, lavaTopY, dw, 18);
 
-      ctx.fillStyle = 'rgba(255, 180, 80, 0.32)';
+      ctx.fillStyle = 'rgba(255, 40, 20, 0.32)';
       ctx.fillRect(dx, lavaTopY + 8, dw, H - lavaTopY - 8);
 
       ctx.fillStyle = 'rgba(255, 120, 20, 0.22)';
