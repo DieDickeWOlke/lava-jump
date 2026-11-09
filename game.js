@@ -14,7 +14,7 @@ const player = {
   x: 120,
   y: 320,
   vy: 0,
-  speed: 3.5,
+  speed: 2.8,
   jump: 13,
   gravity: 0.6,
 };
@@ -517,17 +517,6 @@ function drawGaps() {
       ctx.fillStyle = `rgba(${Math.round(200 + pulse * 55)}, ${Math.round(20 + pulse * 30)}, ${Math.round(10 + pulse * 10)}, 1)`;
       ctx.fillRect(dx, lavaTopY, dw, H - lavaTopY);
 
-      ctx.fillStyle = 'rgba(255, 255, 220, 0.96)';
-      const bubbleTravel = H - lavaTopY - 18;
-      for (let i = 0; i < Math.max(10, Math.floor(dw / 12)); i += 1) {
-        const bubbleX = dx + ((i + 1) * 16) + ((start * 1.4 + i * 11) % 22);
-        const bubbleY = lavaTopY + 14 + ((bubbleTravel - ((i * 19 + performance.now() * 0.22) % bubbleTravel)) % bubbleTravel);
-        const bubbleR = 12 + ((i % 5) * 4);
-        ctx.beginPath();
-        ctx.arc(bubbleX, bubbleY, bubbleR, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
       ctx.fillStyle = 'rgba(255, 255, 180, 0.8)';
       ctx.fillRect(dx, lavaTopY, dw, 18);
 
@@ -539,6 +528,18 @@ function drawGaps() {
         const glowX = dx + 10 + i * 28 + ((start + i) % 16);
         const glowY = lavaTopY + 8 + ((i * 14 + performance.now() * 0.12) % (H - lavaTopY - 24));
         ctx.fillRect(glowX, glowY, 14, 6);
+      }
+
+      ctx.fillStyle = 'rgba(255, 255, 220, 0.96)';
+      for (let i = 0; i < Math.max(10, Math.floor(dw / 12)); i += 1) {
+        const bubbleX = dx + ((i + 1) * 16) + ((start * 1.4 + i * 11) % 22);
+        const bubbleR = 12 + ((i % 5) * 4);
+        const bubbleTravel = H - lavaTopY - bubbleR * 2;
+        const bubbleProgress = (i * 19 + performance.now() * 0.22) % bubbleTravel;
+        const bubbleY = H - bubbleR - bubbleProgress;
+        ctx.beginPath();
+        ctx.arc(bubbleX, bubbleY, bubbleR, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }
